@@ -80,6 +80,10 @@ final class CurrencyConverter
             return floatval($amount);
         }
 
+        if ($this->isSameCurrency($from, $to)) {
+            return floatval($amount);
+        }
+
         return call_user_func_array([$this, 'convertWith' . $this->api], [$from, $to, $amount]);
     }
 
@@ -258,7 +262,7 @@ final class CurrencyConverter
      * @param string $to
      * @return boolean
      */
-    private function isStableCoin(string $from, string $to) : bool
+    public function isStableCoin(string $from, string $to) : bool
     {
         if (strtoupper($from) == 'USD' || strtoupper($to) == 'USD') {
             if (in_array(strtoupper($from), $this->stableCoins) || in_array(strtoupper($to), $this->stableCoins)) {
@@ -270,10 +274,20 @@ final class CurrencyConverter
     }
 
     /**
+     * @param string $from
+     * @param string $to
+     * @return boolean
+     */
+    public function isSameCurrency(string $from, string $to) : bool
+    {
+        return strtoupper($from) == strtoupper($to);
+    }
+
+    /**
      * @param array $symbols
      * @return void
      */
-    private function addStableCoins(array $symbols) : void
+    public function addStableCoins(array $symbols) : void
     {
         $this->stableCoins = array_merge($this->stableCoins, $symbols);
     }
