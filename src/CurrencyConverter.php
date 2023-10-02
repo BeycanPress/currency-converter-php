@@ -115,11 +115,24 @@ final class CurrencyConverter
 
         $fromId = array_search(strtolower($from), array_column($tokenList, 'symbol'));
         $toId = array_search(strtolower($to), array_column($tokenList, 'symbol'));
+        
+        // if token not found
+        if (!$fromId || !$toId) {
+            return null;
+        }
+
         $cgFrom = $tokenList[$fromId]->id;
         $cgTo = $tokenList[$toId]->id;
+        $key = $cgFrom.$cgTo;
 
-        $result = json_decode($this->cache(function() use ($amount, $cgFrom, $cgTo) {
+        $cgPriceFile = dirname(__DIR__) . '/cache/cg-price.json';
+        if (file_exists($cgPriceFile) && time() - 30 < filemtime($cgPriceFile)) {
+            $cgPrice = json_decode(file_get_contents(dirname(__DIR__) . '/cache/cg-price.json'));
+        } else {
+            $cgPrice = (object) [];
+        }
 
+        if (!isset($cgPrice->$key)) {
             $parameters = [
                 'ids' => urlencode(implode(',', [$cgTo])),
                 'vs_currencies' => urlencode(implode(',', [$cgFrom]))
@@ -144,7 +157,7 @@ final class CurrencyConverter
 
             if (isset($response->{$cgTo})) {
                 if (isset($response->{$cgTo}->{$cgFrom})) {
-                    $result = ($amount / $response->{$cgTo}->{$cgFrom});
+                    $result = $response->{$cgTo}->{$cgFrom};
                 } else {
                     $result = null;
                 }
@@ -152,12 +165,18 @@ final class CurrencyConverter
                 $result = null;
             }
 
-            curl_close($curl); 
+            curl_close($curl);
+            
+            $cgPrice->$key = $result;
 
-            return json_decode($result);
-        }, 'cg-price', 30)->content);
+            file_put_contents($cgPriceFile, json_encode($cgPrice));
+        }
 
-        return $result;
+        if (is_null($cgPrice->$key)) {
+            return null;
+        }
+
+        return ($amount / $cgPrice->$key);
     }
 
     /**
