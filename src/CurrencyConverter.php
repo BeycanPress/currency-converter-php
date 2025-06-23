@@ -2,8 +2,6 @@
 
 namespace BeycanPress;
 
-use \BeycanPress\Http\Client;
-
 final class CurrencyConverter
 {
     /**
