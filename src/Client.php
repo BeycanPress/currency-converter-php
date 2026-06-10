@@ -7,6 +7,14 @@ namespace BeycanPress;
 final class Client
 {
     /**
+     * Default User-Agent sent with every request. Some APIs (e.g. CoinGecko
+     * behind Cloudflare) reject requests that arrive without a User-Agent.
+     * @var string
+     */
+    private const DEFAULT_USER_AGENT =
+        'Mozilla/5.0 (compatible; CurrencyConverterPHP/1.0; +https://github.com/BeycanPress/currency-converter-php)';
+
+    /**
      * Base API url
      * @var string|null
      */
@@ -214,7 +222,7 @@ final class Client
 
         if (!empty($data)) {
             if ($raw) {
-                $data = wp_json_encode($data);
+                $data = json_encode($data);
             }
             $this->options['body'] = $data;
         }
@@ -231,19 +239,46 @@ final class Client
      */
     private function send(string $url): mixed
     {
-        $response = wp_remote_request($url, $this->options);
+        $curl = curl_init();
 
-        if (is_wp_error($response)) {
-            $this->error = $response->get_error_message();
+        $options = [
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_USERAGENT      => self::DEFAULT_USER_AGENT,
+            CURLOPT_CUSTOMREQUEST  => $this->options['method'] ?? 'GET',
+            CURLOPT_TIMEOUT        => $this->options['timeout'] ?? 10,
+        ];
+
+        if (!empty($this->options['headers'])) {
+            $headers = [];
+            foreach ($this->options['headers'] as $key => $value) {
+                $headers[] = is_int($key) ? $value : $key . ': ' . $value;
+            }
+            $options[CURLOPT_HTTPHEADER] = $headers;
+        }
+
+        if (isset($this->options['body'])) {
+            $options[CURLOPT_POSTFIELDS] = $this->options['body'];
+        }
+
+        curl_setopt_array($curl, $options);
+
+        $body = curl_exec($curl);
+
+        if (false === $body) {
+            $this->error = curl_error($curl);
+            curl_close($curl);
             return false;
         }
 
         $this->info = [
-            'response_code' => wp_remote_retrieve_response_code($response),
-            'response_message' => wp_remote_retrieve_response_message($response),
+            'response_code'    => curl_getinfo($curl, CURLINFO_HTTP_CODE),
+            'response_message' => '',
         ];
 
-        $body = wp_remote_retrieve_body($response);
+        curl_close($curl);
+
         return $this->ifIsJson($body);
     }
 }
